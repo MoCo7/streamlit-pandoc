@@ -69,31 +69,48 @@ if st.button("変換実行"):
             # `top` の場合、-t top.lua を渡す
             extra_args = ["-t", "top.lua"] if output_format == "top" else []
 
-            pypandoc.convert_text(
-                text_content, output_format if output_format != "top" else "plain",
-                format=input_format, outputfile=output_path, extra_args=extra_args
-            )
-
-            st.success(f"✅ 変換成功！({output_ext} ファイルが作成されました)")
-
-            # MIME タイプの設定
-            mime_type = (
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                if output_format == "docx"
-                else "text/html" if output_format == "html"
-                else "text/plain"
-            )
-
-            # ダウンロードボタンを表示
-            with open(output_path, "rb") as f:
-                st.download_button(
-                    label=f"📥 {output_ext.upper()}ファイルをダウンロード",
-                    data=f,
-                    file_name=output_path,
-                    mime=mime_type,
+            if output_format in ["top", "plain"]:
+                # 文字列として Pandoc の変換結果を取得
+                converted_text = pypandoc.convert_text(
+                    text_content, "plain", format=input_format, extra_args=extra_args
                 )
 
-            os.remove(output_path)  # 不要になったファイルを削除
+                # プレビューを表示
+                st.subheader("🔍 変換結果プレビュー")
+                st.text_area("変換後のテキスト", converted_text, height=300)
+
+                # ダウンロードボタン（top / plain 用）
+                st.download_button(
+                    label="📥 テキストファイルをダウンロード",
+                    data=converted_text,
+                    file_name=output_path,
+                    mime="text/plain",
+                )
+            else:
+                # docx / html の場合は通常のファイル変換処理
+                pypandoc.convert_text(
+                    text_content, output_format, format=input_format, outputfile=output_path, extra_args=extra_args
+                )
+
+                st.success(f"✅ 変換成功！({output_ext} ファイルが作成されました)")
+
+                # MIME タイプの設定
+                mime_type = (
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    if output_format == "docx"
+                    else "text/html"
+                )
+
+                # ダウンロードボタン（docx / html 用）
+                with open(output_path, "rb") as f:
+                    st.download_button(
+                        label=f"📥 {output_ext.upper()}ファイルをダウンロード",
+                        data=f,
+                        file_name=output_path,
+                        mime=mime_type,
+                    )
+
+                os.remove(output_path)  # 不要になったファイルを削除
 
             # `top.lua` も削除
             if output_format == "top" and os.path.exists("top.lua"):
