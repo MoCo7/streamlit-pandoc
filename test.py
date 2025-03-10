@@ -1,7 +1,7 @@
 import streamlit as st
 import pypandoc
 import os
-from generate_lua_filter import generate_lua_filter  # 追加！
+from generate_lua_filter import generate_lua_filter  # Lua フィルタ生成関数をインポート
 
 # Streamlit アプリタイトル
 st.title("📄 テキスト変換ツール")
@@ -52,7 +52,12 @@ if st.button("変換実行"):
 
         # `top` の場合は Lua フィルタを生成
         if output_format == "top":
-            generate_lua_filter(chapter_number, heading_depth)  # ここで `top.lua` を作成
+            generate_lua_filter(chapter_number, heading_depth)  # Lua フィルタ生成
+
+            # `top.lua` が正しく生成されたかチェック
+            if not os.path.exists("top.lua"):
+                st.error("❌ Lua フィルタの生成に失敗しました！（top.lua が見つかりません）")
+                st.stop()  # ここで処理を停止
 
         # 変換処理
         try:
