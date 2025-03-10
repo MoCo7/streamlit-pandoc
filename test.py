@@ -3,7 +3,7 @@ import pypandoc
 import os
 
 # Streamlit アプリタイトル
-st.title("📄 テキスト変換ツール（Lua フィルタ対応）")
+st.title("📄 テキスト変換ツール")
 
 # 入力フォーマットの選択（デフォルトは Markdown）
 input_format = st.radio("入力フォーマットを選んでください", ["md", "org", "rst"], index=0)
@@ -21,10 +21,7 @@ else:
     uploaded_file = st.file_uploader(f"{input_format.upper()} ファイルをアップロードしてください", type=[input_format])
 
 # 変換先フォーマットを選択
-output_format = st.selectbox("変換先フォーマットを選んでください", ["docx", "html", "plain"])
-
-# Lua フィルタの適用を選択
-use_lua_filter = st.selectbox("Lua フィルタを適用しますか？", ["なし", "top"])
+output_format = st.selectbox("変換先フォーマットを選んでください", ["docx", "html", "plain", "top"])
 
 # 変換処理
 if st.button("変換実行"):
@@ -48,18 +45,17 @@ if st.button("変換実行"):
             output_ext = "docx" if output_format == "docx" else "html" if output_format == "html" else "txt"
             output_path = f"converted.{output_ext}"
 
-            # Lua フィルタを適用する場合
-            extra_args = []
-            if use_lua_filter == "top" and os.path.exists("top.lua"):
-                extra_args = ["--lua-filter", "top.lua"]
+            # `top` の場合、-t top.lua を渡す
+            extra_args = ["-t", "top.lua"] if output_format == "top" else []
 
             pypandoc.convert_text(
-                text_content, output_format, format=input_format, outputfile=output_path, extra_args=extra_args
+                text_content, output_format if output_format != "top" else "plain",
+                format=input_format, outputfile=output_path, extra_args=extra_args
             )
 
             st.success(f"✅ 変換成功！({output_ext} ファイルが作成されました)")
 
-            # ダウンロードボタンを表示
+            # MIME タイプの設定
             mime_type = (
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 if output_format == "docx"
@@ -67,6 +63,7 @@ if st.button("変換実行"):
                 else "text/plain"
             )
 
+            # ダウンロードボタンを表示
             with open(output_path, "rb") as f:
                 st.download_button(
                     label=f"📥 {output_ext.upper()}ファイルをダウンロード",
