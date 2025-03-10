@@ -23,6 +23,15 @@ else:
 # 変換先フォーマットを選択
 output_format = st.selectbox("変換先フォーマットを選んでください", ["docx", "html", "plain", "top"])
 
+# 「top」選択時のみ、数値入力フィールドを表示
+chapter_number = None
+heading_depth = None
+
+if output_format == "top":
+    st.subheader("🔢 追加設定（top専用）")
+    chapter_number = st.number_input("章番号", min_value=0, step=1, value=1)
+    heading_depth = st.number_input("見出しの採番の深さ", min_value=1, step=1, value=3)
+
 # 変換処理
 if st.button("変換実行"):
     if not text_content and not uploaded_file:
