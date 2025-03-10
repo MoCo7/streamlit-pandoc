@@ -1,6 +1,7 @@
 import streamlit as st
 import pypandoc
 import os
+from generate_lua_filter import generate_lua_filter  # 追加！
 
 # Streamlit アプリタイトル
 st.title("📄 テキスト変換ツール")
@@ -49,6 +50,10 @@ if st.button("変換実行"):
             
             os.remove(input_path)  # 不要になったファイルを削除
 
+        # `top` の場合は Lua フィルタを生成
+        if output_format == "top":
+            generate_lua_filter(chapter_number, heading_depth)  # ここで `top.lua` を作成
+
         # 変換処理
         try:
             output_ext = "docx" if output_format == "docx" else "html" if output_format == "html" else "txt"
@@ -82,6 +87,10 @@ if st.button("変換実行"):
                 )
 
             os.remove(output_path)  # 不要になったファイルを削除
+
+            # `top.lua` も削除
+            if output_format == "top" and os.path.exists("top.lua"):
+                os.remove("top.lua")
 
         except Exception as e:
             st.error(f"❌ 変換失敗: {e}")
