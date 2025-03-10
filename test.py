@@ -5,56 +5,59 @@ import os
 # Streamlit アプリタイトル
 st.title("📄 Markdown 変換ツール")
 
+# 入力方法の選択
+input_method = st.radio("入力方法を選んでください", ["テキスト入力", "ファイルアップロード"])
+
+# Markdown入力（ユーザーの選択によって表示を切り替える）
+uploaded_file = None
+md_text = None
+
+if input_method == "テキスト入力":
+    md_text = st.text_area("Markdownを入力してください", height=300)
+else:
+    uploaded_file = st.file_uploader("Markdownファイルをアップロードしてください", type=["md"])
+
 # 変換先フォーマットを選択
 output_format = st.selectbox("変換先フォーマットを選んでください", ["docx", "html"])
 
-# ファイルアップロード
-uploaded_file = st.file_uploader("Markdownファイルをアップロードしてください", type=["md"])
+# 変換処理
+if st.button("変換実行"):
+    if not md_text and not uploaded_file:
+        st.error("❌ Markdown の入力が必要です！")
+    else:
+        # 入力されたMarkdownの準備
+        if uploaded_file:
+            input_path = "uploaded.md"
+            with open(input_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
 
-if uploaded_file:
-    # 一時ファイルに保存
-    input_path = "uploaded.md"
-    with open(input_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+            # ファイルを読み込んでテキストとして扱う
+            with open(input_path, "r", encoding="utf-8") as f:
+                md_text = f.read()
+            
+            os.remove(input_path)  # 不要になったファイルを削除
 
-    # 出力ファイル名
-    output_ext = "docx" if output_format == "docx" else "html"
-    output_path = f"converted.{output_ext}"
+        # 変換処理
+        try:
+            output_ext = "docx" if output_format == "docx" else "html"
+            output_path = f"converted.{output_ext}"
 
-    # Pandocで変換
-    try:
-        pypandoc.convert_file(
-            input_path, output_format, format="md", outputfile=output_path
-        )
-        st.success(f"✅ 変換成功！({output_ext} ファイルが作成されました)")
+            pypandoc.convert_text(md_text, output_format, format="md", outputfile=output_path)
 
-        # ダウンロードボタンを表示
-        with open(output_path, "rb") as f:
-            st.download_button(
-                label=f"📥 {output_ext.upper()}ファイルをダウンロード",
-                data=f,
-                file_name=output_path,
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                if output_format == "docx"
-                else "text/html",
-            )
+            st.success(f"✅ 変換成功！({output_ext} ファイルが作成されました)")
 
-        # 後処理: 一時ファイルの削除
-        os.remove(input_path)
-        os.remove(output_path)
+            # ダウンロードボタンを表示
+            with open(output_path, "rb") as f:
+                st.download_button(
+                    label=f"📥 {output_ext.upper()}ファイルをダウンロード",
+                    data=f,
+                    file_name=output_path,
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    if output_format == "docx"
+                    else "text/html",
+                )
 
-    except Exception as e:
-        st.error(f"❌ 変換失敗: {e}")
+            os.remove(output_path)  # 不要になったファイルを削除
 
-# import streamlit as st
-# st.caption('キャプション `<caption>`')
-# st.text('''
-# 	Lorem ipsum dolor sit amet, consectetur adipiscing elit. Mauris vel velit leo.
-# 	Suspendisse fermentum augue metus, ac lacinia ipsum varius sit amet.
-# 	Nullam sagittis, tellus id finibus tincidunt, elit mi pellentesque sem, sed suscipit mi lectus non quam.''')
-
-# st.code('''
-# import streamlit as st
-# st.snow()''',
-# 	language='python',
-# 	line_numbers=True)
+        except Exception as e:
+            st.error(f"❌ 変換失敗: {e}")
