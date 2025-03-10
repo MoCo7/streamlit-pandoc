@@ -50,9 +50,11 @@ if st.button("変換実行"):
             
             os.remove(input_path)  # 不要になったファイルを削除
 
-        # `top` の場合は Lua フィルタを生成
+        # `top` の場合は Lua フィルタを生成して `top.lua` に保存
         if output_format == "top":
-            generate_lua_filter(chapter_number, heading_depth)  # Lua フィルタ生成
+            lua_script = generate_lua_filter(chapter_number, heading_depth)  # Lua スクリプトを取得
+            with open("top.lua", "w", encoding="utf-8") as f:
+                f.write(lua_script)  # ここで書き出し処理を実行
 
             # `top.lua` が正しく生成されたかチェック
             if not os.path.exists("top.lua"):
