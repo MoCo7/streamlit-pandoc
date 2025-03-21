@@ -40,9 +40,15 @@ if md_text:
     soup = BeautifulSoup(html, 'html.parser')
 
     md_elements = {
-        "見出し(h1-h6)": list({f"h{level.name[-1]}" for level in soup.find_all(['h1','h2','h3','h4','h5','h6'])}),
+        "見出しh1": ["h1"] if soup.find_all('h1') else [],
+        "見出しh2": ["h2"] if soup.find_all('h2') else [],
+        "見出しh3": ["h3"] if soup.find_all('h3') else [],
+        "見出しh4": ["h4"] if soup.find_all('h4') else [],
+        "見出しh5": ["h5"] if soup.find_all('h5') else [],
+        "見出しh6": ["h6"] if soup.find_all('h6') else [],
         "太字": ["strong"] if soup.find_all('strong') else [],
         "イタリック": ["em"] if soup.find_all('em') else [],
+        "等幅フォント": ["code"] if soup.find_all('code') else [],
         "箇条書き": ["ul"] if soup.find_all('ul') else [],
         "番号つき箇条書き": ["ol"] if soup.find_all('ol') else [],
     }
@@ -55,9 +61,10 @@ if md_text:
     mapping = {}
     for element, detected in md_elements.items():
         if detected:
+            style_type = "CharacterStyle" if element in ["太字", "イタリック", "等幅フォント"] else "ParagraphStyle"
             mapping[element] = st.selectbox(
                 f"{element}に対応するInDesignスタイルを選択",
-                options=["（指定なし）"] + styles["ParagraphStyle"] + styles["CharacterStyle"],
+                options=["（指定なし）"] + styles[style_type],
                 index=1
             )
 
@@ -76,25 +83,27 @@ if md_text:
             "app.findGrepPreferences = app.changeGrepPreferences = null;\n"
         ]
 
-        for h in ["h1", "h2", "h3", "h4", "h5", "h6"]:
-            if mapping.get("見出し(h1-h6)") and soup.find_all(h):
-                style_name = mapping["見出し(h1-h6)"]
+        for level in ["h1", "h2", "h3", "h4", "h5", "h6"]:
+            key = f"見出し{level}"
+            if mapping.get(key) and soup.find_all(level):
+                style_name = mapping[key]
                 js_style = style_to_js(style_name, "paragraph")
                 script_lines.append(
                     f'app.findGrepPreferences.findWhat = "(?<=^).+";\n'
                     f'app.changeGrepPreferences.appliedParagraphStyle = {js_style};\n'
                     f'doc.changeGrep();\n'
                 )
-                break
 
-        if mapping.get("太字"):
-            style_name = mapping["太字"]
-            js_style = style_to_js(style_name, "character")
-            script_lines.append(
-                f'app.findGrepPreferences.findWhat = "(?<=\\*\\*).+?(?=\\*\\*)";\n'
-                f'app.changeGrepPreferences.appliedCharacterStyle = {js_style};\n'
-                f'doc.changeGrep();\n'
-            )
+        for inline in [("太字", "\\*\\*"), ("イタリック", "\\*"), ("等幅フォント", "`")]:
+            key, delimiter = inline
+            if mapping.get(key):
+                style_name = mapping[key]
+                js_style = style_to_js(style_name, "character")
+                script_lines.append(
+                    f'app.findGrepPreferences.findWhat = "(?<={delimiter}).+?(?={delimiter})";\n'
+                    f'app.changeGrepPreferences.appliedCharacterStyle = {js_style};\n'
+                    f'doc.changeGrep();\n'
+                )
 
         script_lines.append("app.findGrepPreferences = app.changeGrepPreferences = null;")
 
