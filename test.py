@@ -1,120 +1,109 @@
 import streamlit as st
-import pypandoc
-import os
-from generate_lua_filter import generate_lua_filter  # Lua フィルタ生成関数をインポート
+import zipfile
+import xml.etree.ElementTree as ET
+import markdown
+from bs4 import BeautifulSoup
+from io import BytesIO
 
-# Streamlit アプリタイトル
-st.title("📄 テキスト変換ツール")
+st.title("📑 IDML・Markdownスタイルマッピングアプリ")
 
-# 入力フォーマットの選択（デフォルトは Markdown）
-input_format = st.radio("入力フォーマットを選んでください", ["md", "org", "rst"], index=0)
+# 1️⃣ IDMLファイルをアップロードしてStyles.xmlを抽出
+uploaded_idml = st.file_uploader("📂 IDMLファイルをアップロード", type=["idml"])
 
-# 入力方法の選択
-input_method = st.radio("入力方法を選んでください", ["テキスト入力", "ファイルアップロード"])
+styles = {"ParagraphStyle": [], "CharacterStyle": []}
 
-# ユーザー入力を保持する変数
-uploaded_file = None
-text_content = None
+if uploaded_idml:
+    with zipfile.ZipFile(uploaded_idml) as z:
+        with z.open('Resources/Styles.xml') as styles_xml:
+            tree = ET.parse(styles_xml)
+            root = tree.getroot()
+            for para_style in root.findall(".//ParagraphStyle"):
+                styles["ParagraphStyle"].append(para_style.get('Name'))
+            for char_style in root.findall(".//CharacterStyle"):
+                styles["CharacterStyle"].append(char_style.get('Name'))
 
-if input_method == "テキスト入力":
-    text_content = st.text_area(f"{input_format.upper()} を入力してください", height=300)
-else:
-    uploaded_file = st.file_uploader(f"{input_format.upper()} ファイルをアップロードしてください", type=[input_format])
+    st.success("✅ Styles.xmlを取得しました！")
+    st.write("段落スタイル:", styles["ParagraphStyle"])
+    st.write("文字スタイル:", styles["CharacterStyle"])
 
-# 変換先フォーマットを選択
-output_format = st.selectbox("変換先フォーマットを選んでください", ["docx", "html", "plain", "top"])
+# 2️⃣ Markdownのアップロード or 入力
+md_option = st.radio("Markdown入力方法を選択してください", ["直接入力", "ファイルアップロード"])
 
-# 「top」選択時のみ、数値入力フィールドを表示
-chapter_number = None
-heading_depth = None
+md_text = ""
+if md_option == "直接入力":
+    md_text = st.text_area("Markdownを入力してください", height=200)
+elif md_option == "ファイルアップロード":
+    uploaded_md = st.file_uploader("📂 Markdownファイルをアップロード", type=["md"])
+    if uploaded_md:
+        md_text = uploaded_md.read().decode('utf-8')
 
-if output_format == "top":
-    st.subheader("🔢 追加設定（top専用）")
-    chapter_number = st.number_input("章番号", min_value=0, step=1, value=1)
-    heading_depth = st.number_input("見出しの採番の深さ", min_value=1, step=1, value=3)
+# 3️⃣ Markdownを解析して要素を抽出
+if md_text:
+    html = markdown.markdown(md_text)
+    soup = BeautifulSoup(html, 'html.parser')
 
-# 変換処理
-if st.button("変換実行"):
-    if not text_content and not uploaded_file:
-        st.error("❌ テキストの入力またはファイルのアップロードが必要です！")
-    else:
-        # ファイルアップロードの場合、内容を取得
-        if uploaded_file:
-            input_path = f"uploaded.{input_format}"
-            with open(input_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
+    md_elements = {
+        "見出し(h1-h6)": list({f"h{level.name[-1]}" for level in soup.find_all(['h1','h2','h3','h4','h5','h6'])}),
+        "太字": ["strong"] if soup.find_all('strong') else [],
+        "イタリック": ["em"] if soup.find_all('em') else [],
+        "箇条書き": ["ul"] if soup.find_all('ul') else [],
+        "番号つき箇条書き": ["ol"] if soup.find_all('ol') else [],
+    }
 
-            # ファイルを読み込んでテキストとして扱う
-            with open(input_path, "r", encoding="utf-8") as f:
-                text_content = f.read()
-            
-            os.remove(input_path)  # 不要になったファイルを削除
+    st.info("🧐 Markdown要素を検出しました！")
+    st.write(md_elements)
 
-        # `top` の場合は Lua フィルタを生成して `top.lua` に保存
-        if output_format == "top":
-            lua_script = generate_lua_filter(chapter_number, heading_depth)  # Lua スクリプトを取得
-            with open("top.lua", "w", encoding="utf-8") as f:
-                f.write(lua_script)  # ここで書き出し処理を実行
+    # 4️⃣ スタイルマッピングUI
+    st.header("🔧 スタイルマッピング設定")
 
-            # `top.lua` が正しく生成されたかチェック
-            if not os.path.exists("top.lua"):
-                st.error("❌ Lua フィルタの生成に失敗しました！（top.lua が見つかりません）")
-                st.stop()  # ここで処理を停止
+    mapping = {}
+    for element, detected in md_elements.items():
+        if detected:
+            mapping[element] = st.selectbox(
+                f"{element}に対応するInDesignスタイルを選択",
+                options=["（指定なし）"] + styles["ParagraphStyle"] + styles["CharacterStyle"],
+                index=1
+            )
 
-        # 変換処理
-        try:
-            output_ext = "docx" if output_format == "docx" else "html" if output_format == "html" else "txt"
-            output_path = f"converted.{output_ext}"
+    # 5️⃣ InDesign検索置換スクリプト生成
+    if st.button("💻 検索置換スクリプトを生成"):
+        script_lines = ["// InDesign検索置換スクリプト生成（JavaScript）\n",
+                        "var doc = app.activeDocument;\n",
+                        "app.findGrepPreferences = app.changeGrepPreferences = null;\n"]
 
-            # `top` の場合、-t top.lua を渡す
-            extra_args = ["-t", "top.lua"] if output_format == "top" else []
-
-            if output_format in ["top", "plain"]:
-                # 文字列として Pandoc の変換結果を取得
-                converted_text = pypandoc.convert_text(
-                    text_content, "plain", format=input_format, extra_args=extra_args
+        # 見出し例
+        for h in ["h1", "h2", "h3", "h4", "h5", "h6"]:
+            if mapping.get("見出し(h1-h6)") and soup.find_all(h):
+                style_name = mapping["見出し(h1-h6)"]
+                script_lines.append(
+                    f'app.findGrepPreferences.findWhat = "(?<=^).+";\n'
+                    f'app.changeGrepPreferences.appliedParagraphStyle = doc.paragraphStyles.item("{style_name}");\n'
+                    f'doc.changeGrep();\n'
                 )
+                break  # 簡易的にすべての見出しを同じスタイルとして適用
 
-                # プレビューを表示
-                st.subheader("🔍 変換結果プレビュー")
-                st.text_area("変換後のテキスト", converted_text, height=300)
+        # 太字の例
+        if mapping.get("太字"):
+            style_name = mapping["太字"]
+            script_lines.append(
+                f'app.findGrepPreferences.findWhat = "(?<=\\*\\*).+?(?=\\*\\*)";\n'
+                f'app.changeGrepPreferences.appliedCharacterStyle = doc.characterStyles.item("{style_name}");\n'
+                f'doc.changeGrep();\n'
+            )
 
-                # ダウンロードボタン（top / plain 用）
-                st.download_button(
-                    label="📥 テキストファイルをダウンロード",
-                    data=converted_text,
-                    file_name=output_path,
-                    mime="text/plain",
-                )
-            else:
-                # docx / html の場合は通常のファイル変換処理
-                pypandoc.convert_text(
-                    text_content, output_format, format=input_format, outputfile=output_path, extra_args=extra_args
-                )
+        script_lines.append("app.findGrepPreferences = app.changeGrepPreferences = null;")
 
-                st.success(f"✅ 変換成功！({output_ext} ファイルが作成されました)")
+        script_text = "\n".join(script_lines)
 
-                # MIME タイプの設定
-                mime_type = (
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    if output_format == "docx"
-                    else "text/html"
-                )
+        st.code(script_text, language="javascript")
 
-                # ダウンロードボタン（docx / html 用）
-                with open(output_path, "rb") as f:
-                    st.download_button(
-                        label=f"📥 {output_ext.upper()}ファイルをダウンロード",
-                        data=f,
-                        file_name=output_path,
-                        mime=mime_type,
-                    )
+        # ダウンロード用リンク作成
+        script_filename = "find_replace.jsx"
+        script_file = BytesIO(script_text.encode('utf-8'))
+        st.download_button(
+            label="📥 スクリプトをダウンロード",
+            data=script_file,
+            file_name=script_filename,
+            mime="application/javascript"
+        )
 
-                os.remove(output_path)  # 不要になったファイルを削除
-
-            # `top.lua` も削除
-            if output_format == "top" and os.path.exists("top.lua"):
-                os.remove("top.lua")
-
-        except Exception as e:
-            st.error(f"❌ 変換失敗: {e}")
