@@ -76,6 +76,15 @@ if md_text:
             group, style = parts[0], parts[1]
             return f'doc.{style_type}StyleGroups.item("{group}").{style_type}Styles.item("{style}")'
 
+    md_heading_patterns = {
+        "h1": r"(?<=^# )(.+)",
+        "h2": r"(?<=^## )(.+)",
+        "h3": r"(?<=^### )(.+)",
+        "h4": r"(?<=^#### )(.+)",
+        "h5": r"(?<=^##### )(.+)",
+        "h6": r"(?<=^###### )(.+)",
+    }
+
     if st.button("💻 検索置換スクリプトを生成"):
         script_lines = [
             "// InDesign検索置換スクリプト生成（JavaScript）\n",
@@ -88,20 +97,10 @@ if md_text:
             if mapping.get(key) and soup.find_all(level):
                 style_name = mapping[key]
                 js_style = style_to_js(style_name, "paragraph")
+                pattern = md_heading_patterns[level]
                 script_lines.append(
-                    f'app.findGrepPreferences.findWhat = "(?<=^).+";\n'
+                    f'app.findGrepPreferences.findWhat = "{pattern}";\n'
                     f'app.changeGrepPreferences.appliedParagraphStyle = {js_style};\n'
-                    f'doc.changeGrep();\n'
-                )
-
-        for inline in [("太字", "\\*\\*"), ("イタリック", "\\*"), ("等幅フォント", "`")]:
-            key, delimiter = inline
-            if mapping.get(key):
-                style_name = mapping[key]
-                js_style = style_to_js(style_name, "character")
-                script_lines.append(
-                    f'app.findGrepPreferences.findWhat = "(?<={delimiter}).+?(?={delimiter})";\n'
-                    f'app.changeGrepPreferences.appliedCharacterStyle = {js_style};\n'
                     f'doc.changeGrep();\n'
                 )
 
