@@ -7,7 +7,6 @@ from io import BytesIO
 
 st.title("📑 IDML・Markdownスタイルマッピングアプリ")
 
-# 1️⃣ IDMLファイルをアップロードしてStyles.xmlを抽出
 uploaded_idml = st.file_uploader("📂 IDMLファイルをアップロード", type=["idml"])
 
 styles = {"ParagraphStyle": [], "CharacterStyle": []}
@@ -26,7 +25,6 @@ if uploaded_idml:
     st.write("段落スタイル:", styles["ParagraphStyle"])
     st.write("文字スタイル:", styles["CharacterStyle"])
 
-# 2️⃣ Markdownのアップロード or 入力
 md_option = st.radio("Markdown入力方法を選択してください", ["直接入力", "ファイルアップロード"])
 
 md_text = ""
@@ -37,7 +35,6 @@ elif md_option == "ファイルアップロード":
     if uploaded_md:
         md_text = uploaded_md.read().decode('utf-8')
 
-# 3️⃣ Markdownを解析して要素を抽出
 if md_text:
     html = markdown.markdown(md_text)
     soup = BeautifulSoup(html, 'html.parser')
@@ -53,7 +50,6 @@ if md_text:
     st.info("🧐 Markdown要素を検出しました！")
     st.write(md_elements)
 
-    # 4️⃣ スタイルマッピングUI
     st.header("🔧 スタイルマッピング設定")
 
     mapping = {}
@@ -65,29 +61,38 @@ if md_text:
                 index=1
             )
 
-    # 5️⃣ InDesign検索置換スクリプト生成
-    if st.button("💻 検索置換スクリプトを生成"):
-        script_lines = ["// InDesign検索置換スクリプト生成（JavaScript）\n",
-                        "var doc = app.activeDocument;\n",
-                        "app.findGrepPreferences = app.changeGrepPreferences = null;\n"]
+    def style_to_js(style_full_name, style_type="paragraph"):
+        parts = style_full_name.split(":")
+        if len(parts) == 1:
+            return f'doc.{style_type}Styles.item("{parts[0]}")'
+        else:
+            group, style = parts[0], parts[1]
+            return f'doc.{style_type}StyleGroups.item("{group}").{style_type}Styles.item("{style}")'
 
-        # 見出し例
+    if st.button("💻 検索置換スクリプトを生成"):
+        script_lines = [
+            "// InDesign検索置換スクリプト生成（JavaScript）\n",
+            "var doc = app.activeDocument;\n",
+            "app.findGrepPreferences = app.changeGrepPreferences = null;\n"
+        ]
+
         for h in ["h1", "h2", "h3", "h4", "h5", "h6"]:
             if mapping.get("見出し(h1-h6)") and soup.find_all(h):
                 style_name = mapping["見出し(h1-h6)"]
+                js_style = style_to_js(style_name, "paragraph")
                 script_lines.append(
                     f'app.findGrepPreferences.findWhat = "(?<=^).+";\n'
-                    f'app.changeGrepPreferences.appliedParagraphStyle = doc.paragraphStyles.item("{style_name}");\n'
+                    f'app.changeGrepPreferences.appliedParagraphStyle = {js_style};\n'
                     f'doc.changeGrep();\n'
                 )
-                break  # 簡易的にすべての見出しを同じスタイルとして適用
+                break
 
-        # 太字の例
         if mapping.get("太字"):
             style_name = mapping["太字"]
+            js_style = style_to_js(style_name, "character")
             script_lines.append(
                 f'app.findGrepPreferences.findWhat = "(?<=\\*\\*).+?(?=\\*\\*)";\n'
-                f'app.changeGrepPreferences.appliedCharacterStyle = doc.characterStyles.item("{style_name}");\n'
+                f'app.changeGrepPreferences.appliedCharacterStyle = {js_style};\n'
                 f'doc.changeGrep();\n'
             )
 
@@ -97,7 +102,6 @@ if md_text:
 
         st.code(script_text, language="javascript")
 
-        # ダウンロード用リンク作成
         script_filename = "find_replace.jsx"
         script_file = BytesIO(script_text.encode('utf-8'))
         st.download_button(
@@ -106,4 +110,3 @@ if md_text:
             file_name=script_filename,
             mime="application/javascript"
         )
-
